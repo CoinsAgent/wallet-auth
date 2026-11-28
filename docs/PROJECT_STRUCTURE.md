@@ -1,3 +1,7 @@
+## US-004-01 device authorization placement
+
+`backend/oidc/device.ts` owns device-specific SIWE consent, policy and supported native device-provider adaptation, exposed through `oidc/index.ts`. Existing management owns delegated grant lifetime/refresh/revocation. `backend/wallet-auth/auth.ts` composes these public interfaces; `backend/bootstrap/{schema,database}.ts` owns explicit fresh initialization. `scripts/reset-local-database.ts` composes explicit local/test reset and initialization, with no startup migration. `cli/device.ts` owns device initiation, terminal QR and polling. `frontend/authorization/device.tsx` owns verification/consent; pages and bootstrap assemble it with existing sign-in. Tests remain under app/e2e. No new runtime domain or dependency direction; exact files are declared in work/US-004-01/scope.json before edits.
+
 # Project structure and code placement
 
 ## US-001-07 native client ownership placement

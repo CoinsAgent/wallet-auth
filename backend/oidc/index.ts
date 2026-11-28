@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
-import { oauthProvider, type OAuthOptions, type Scope } from '@better-auth/oauth-provider';
+import { oauthProvider, oauthDeviceAuthorization, DEVICE_CODE_GRANT_TYPE, type OAuthOptions, type Scope } from '@better-auth/oauth-provider';
+import { deviceTokenPolicy } from './device';
 import { jwt } from 'better-auth/plugins';
 import { CLI_CLIENT, MANAGEMENT_RESOURCE, MANAGEMENT_SCOPES, managementTokenPolicy, getGrant, grantActive, hashManagement } from './management';
 import { tokenPolicy, TOKEN_SECONDS, FAMILY_SECONDS } from './policy';
@@ -32,7 +33,7 @@ export function managementProvider(db: Database.Database) {
   const options: OAuthOptions<Scope[]> = {
     loginPage:'/oidc-login', consentPage:'/oidc-consent', storeClientSecret:'encrypted', disableJwtPlugin:true,
     allowDynamicClientRegistration:false, allowUnauthenticatedClientRegistration:false,
-    scopes:MANAGEMENT_SCOPES, grantTypes:['authorization_code','refresh_token'],
+    scopes:MANAGEMENT_SCOPES, grantTypes:['authorization_code','refresh_token',DEVICE_CODE_GRANT_TYPE],
     clientRegistrationAllowedScopes:[], accessTokenExpiresIn:900, refreshTokenExpiresIn:30*86400,
     codeExpiresIn:60, refreshTokenReuseInterval:0, clientPrivileges:()=>false,
     validateInitialAccessToken: async ({initialAccessToken}) => {
@@ -45,7 +46,11 @@ export function managementProvider(db: Database.Database) {
   // Registration's confidential web profile remains openid-only. The system
   // management client is initialized explicitly and is never self-registered.
   const registrationOptions = options;
-  return { options:registrationOptions, plugins:[oauthProvider(registrationOptions),managementTokenPolicy(db,registrationOptions)] };
+  return { options:registrationOptions, plugins:[oauthProvider(registrationOptions),oauthDeviceAuthorization({expiresIn:'5m',interval:'5s',verificationUri:'/device'}),deviceTokenPolicy(db,registrationOptions),managementTokenPolicy(db,registrationOptions)] };
 }
 export const systemCliRecord = { clientId:CLI_CLIENT, resource:MANAGEMENT_RESOURCE };
 export { invalidateClientAuthorization } from './protocol';
+
+export { clearDeviceAuthorization, deviceDataTables, createDeviceAuthorization, deviceSchema, assertDeviceStorage } from './device';
+
+export const deviceStoragePlugin = { id:'walletgate-device-storage',schema:oauthDeviceAuthorization().schema };

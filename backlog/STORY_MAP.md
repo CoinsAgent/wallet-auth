@@ -26,6 +26,8 @@ Targeted ownership refinement: [US-001-07](US-001-07.md) connects the verified w
 
 Targeted CLI refinement on 2026-11-15 and the 2026-11-16 grill: [US-004](US-004.md) replaces session-authorized client operations with Linux CLI/IAT registration and selected-client, per-operation management after browser SIWE consent. The human selected immutable wallet `referenceId` ownership for this slice, superseding US-001-07's client-owner representation on a new environment/database without converting/resetting existing storage. Canonical wallet `user.id` remains unchanged. Public CLI Authorization Code + PKCE uses local loopback or SSH forwarding, opaque 15-minute access and rotating authorization bounded by seven-day inactivity/30-day absolute expiry. Browser authorization listing/individual revocation, permanent deletion/quota recovery and a repository-local AI skill complete the journey. A system CLI identity is explicitly provisioned during initialization; owner applications require IATs and never register through a user session. The linked story owns all detailed decisions and shared-understanding/approval gates; earlier no-refresh and editing/disabling proposals are historical.
 
+Targeted headless CLI refinement: [US-004-01](US-004-01.md) adds explicit Device Authorization using a separate browser, inheriting US-004’s SIWE consent, permission, renewal and revocation policies. The human selected this slice before US-005. Fresh initialization and an explicit local development/test reset are in its proposed scope; deployed/shared resets and data conversion are excluded. The linked story owns detailed decisions and approval gates.
+
 ### End user
 
 | Proposed slice | Arrive from an application | Prove identity | Decide access | Return signed in |
@@ -99,9 +101,12 @@ On 2026-11-12, the human requested swapping the two draft IDs to match delivery 
 | [US-001-07](US-001-07.md) — Own OAuth clients through the verified wallet user ID | Owner uses one persisted wallet identity for registration and viewing | US-001-06 and US-002 | Human-selected ownership refinement before US-004; fresh databases only, no existing-client conversion |
 | [US-003](US-003.md) — Sign in to applications with wallet-based OIDC and renewable tokens | End user explicitly consents to wallet sign-in and optional continued access | US-001, US-001-06, US-001-07, US-002; D5 | OIDC tokens, discovery/JWKS, UserInfo, refresh rotation and client-authenticated revocation before management |
 | [US-004](US-004.md) — Register and manage wallet-owned clients from the CLI using tokens | Owner uses browser SIWE approval, IAT registration and management access for list/read/update/permanent deletion | US-002, US-001-07, US-003; new environment/database and supported provider integration | Adds selected-target CLI management, IAT/reference ownership, authorization revocation UI, companion skill and protocol deletion enforcement |
+| [US-004-01](US-004-01.md) — Authorize remote/headless CLI through Device Authorization | Owner approves remote CLI access from a separate SIWE browser | US-004; supported native device integration and fresh storage | Human-selected next slice before US-005; explicit consent, inherited renewal/revocation, local development/test reset only |
 | [US-005](US-005.md) — Integrate an independent relying party | Developer verifies wallet identity without IdP frontend dependencies | US-003 and US-004 | Demonstrates the complete release across two clients |
 
 ## Next story to detail
+
+- Current priority refinement on 2026-11-26: **US-004-01 → US-005** after US-004. US-004-01 owns the consolidated headless Device Authorization scope and remaining approval gates. Earlier ordering and delivery checkpoints below are historical context; linked stories remain authoritative.
 
 - Human-selected order on 2026-11-12: **US-003 → US-004 → US-005**. Story IDs were swapped at the human’s request; US-003 supplies OIDC sign-in and renewable tokens using registered applications. The 2026-11-15 US-004 refinement adds CLI/token-based management and permanent-deletion enforcement in the existing protocol flow.
 - [US-003](US-003.md) supplies sign-in, consent, discovery/JWKS, UserInfo, refresh families and revocation. Its ordinary third-party tokens do not authorize management; its linked story/evidence own delivery and acceptance records.

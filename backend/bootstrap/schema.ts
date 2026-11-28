@@ -1,9 +1,10 @@
-import { managementSchema } from '../oidc';
+import { managementSchema, deviceSchema } from '../oidc';
 import { clientCapTrigger } from '../applications';
 
 // Pinned initial schema, applied only to an empty database by explicit setup.
 export const initialSchema = String.raw`
 ${managementSchema}
+${deviceSchema}
 
 -- Initial WalletGate schema for the pinned Better Auth/core/provider 1.7.15 stack.
 -- Apply only to an empty database through scripts/init-database.ts. No row data.

@@ -1,3 +1,4 @@
+import { DEVICE_CODE_GRANT_TYPE } from '@better-auth/oauth-provider';
 import { createHash, randomBytes } from 'node:crypto';
 import type Database from 'better-sqlite3';
 
@@ -110,7 +111,7 @@ export function createProtocol(deps: Dependencies) {
       const metadata = await response.json();
       const fields = ['issuer', 'authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri', 'revocation_endpoint', 'response_types_supported', 'response_modes_supported', 'grant_types_supported', 'subject_types_supported', 'id_token_signing_alg_values_supported', 'scopes_supported', 'claims_supported', 'code_challenge_methods_supported'];
       const selected = Object.fromEntries(fields.filter(key => metadata[key] !== undefined).map(key => [key, metadata[key]]));
-      return json({ ...selected, token_endpoint_auth_methods_supported: ['client_secret_basic','none'], revocation_endpoint_auth_methods_supported: ['client_secret_basic','none'], claims_parameter_supported: false, request_parameter_supported: false, request_uri_parameter_supported: false });
+      return json({ ...selected, device_authorization_endpoint: origin+'/api/auth/device/code', grant_types_supported:[...new Set([...(metadata.grant_types_supported??[]),DEVICE_CODE_GRANT_TYPE])], token_endpoint_auth_methods_supported: ['client_secret_basic','none'], revocation_endpoint_auth_methods_supported: ['client_secret_basic','none'], claims_parameter_supported: false, request_parameter_supported: false, request_uri_parameter_supported: false });
     }
     if (postPaths.includes(url.pathname) && request.method === 'POST') {
       if (!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded')) return json({ error: 'invalid_request' }, 400);
