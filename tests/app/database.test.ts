@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -100,4 +100,30 @@ describe('US-004 fresh-only reference ownership readiness', () => {
       expect(command('--database', databasePath).status).toBe(1);
     } finally { if (gate.db.open) gate.close(); }
   });
+});
+
+describe('US-004-01 fresh schema and explicit local schema reset',()=>{
+ const reset=(...args:string[])=>spawnSync(process.execPath,['--import','tsx','scripts/reset-local-database.ts',...args],{encoding:'utf8',timeout:10000});
+ it('refuses an earlier schema at startup without changing it, then explicitly resets local storage and invalidates stale connections',async()=>{
+  const db=new Database(databasePath);initializeDatabase(db);db.close();
+  const gate=await createWalletGate({...config,databasePath});const b=new IdentityBrowser(gate);await b.login();
+  // Simulate the previous initialized schema, retaining identity/client rows.
+  gate.db.exec('DROP TABLE managementDeviceGuess; DROP TABLE managementDevice; DROP TABLE deviceCode');
+  const before=schema(gate.db);const users=gate.db.prepare('SELECT * FROM user').all();
+  await expect(createWalletGate({...config,databasePath})).rejects.toThrow(/device authorization storage/);expect(schema(gate.db)).toEqual(before);expect(gate.db.prepare('SELECT * FROM user').all()).toEqual(users);
+  const result=reset('--database',databasePath,'--environment','test','--confirm','DELETE-LOCAL-DATABASE');expect(result.status,result.stderr).toBe(0);
+  expect((await b.call('session')).status).toBe(503);
+  expect(()=>gate.db.prepare("INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt) VALUES (?,?,?,?,?,?)").run('0x'+'1'.repeat(40),'stale','stale@example.invalid',0,new Date().toISOString(),new Date().toISOString())).toThrow(/reset/);gate.close();
+  const fresh=await createWalletGate({...config,databasePath});expect(fresh.db.prepare('SELECT count(*) AS n FROM user').get()).toEqual({n:0});expect(fresh.db.prepare('SELECT count(*) AS n FROM deviceCode').get()).toEqual({n:0});expect(fresh.db.prepare('SELECT grantTypes FROM oauthClient').get()).toEqual({grantTypes:JSON.stringify(['authorization_code','refresh_token','urn:ietf:params:oauth:grant-type:device_code'])});fresh.close();
+ });
+ it.each(['production','shared',''])('refuses reset environment %s without changing rows or schema',env=>{
+  const db=new Database(databasePath);initializeDatabase(db);const before=schema(db);
+  expect(reset('--database',databasePath,'--environment',env,'--confirm','DELETE-LOCAL-DATABASE').status).toBe(1);expect(schema(db)).toEqual(before);db.close();
+ });
+ it('refuses missing confirmation, relative paths, symlinks and unrelated databases',()=>{
+  const db=new Database(databasePath);db.exec("CREATE TABLE unrelated(id TEXT); INSERT INTO unrelated VALUES ('retain')");const before=schema(db);
+  for(const args of [['--database',databasePath,'--environment','test'],['--database','relative.sqlite','--environment','test','--confirm','DELETE-LOCAL-DATABASE'],['--database',databasePath,'--environment','test','--confirm','DELETE-LOCAL-DATABASE']])expect(reset(...args).status).toBe(1);
+  const linked=join(dir,'linked.sqlite');symlinkSync(databasePath,linked);expect(reset('--database',linked,'--environment','test','--confirm','DELETE-LOCAL-DATABASE').status).toBe(1);
+  expect(schema(db)).toEqual(before);expect(db.prepare('SELECT id FROM unrelated').get()).toEqual({id:'retain'});db.close();
+ });
 });

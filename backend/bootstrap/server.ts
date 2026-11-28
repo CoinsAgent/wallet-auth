@@ -39,7 +39,7 @@ app.post('/api/wallet-rpc', express.json({ limit: '8kb' }), async (req, res) => 
 });
 app.all('/api/{*path}', toNodeHandler(gate.handle));
 app.use(express.static(resolve('dist'), { index: false }));
-app.get(['/', '/index.html'], (_req, res) => {
+app.get(['/', '/index.html', '/device'], (_req, res) => {
   const html = readFileSync(resolve('dist/index.html'), 'utf8').replace('<head>', `<head><meta name="style-nonce" content="${res.locals.styleNonce}"><meta name="csp-nonce" content="${res.locals.styleNonce}">`);
   res.set('Cache-Control', 'no-store').type('html').send(html);
 });

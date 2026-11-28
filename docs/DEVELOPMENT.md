@@ -382,7 +382,7 @@ Run the CLI on the remote Linux host:
 npm run cli -- login --origin https://YOUR-WALLETGATE --label Remote-agent --no-open --ssh-host YOUR-SSH-HOST
 ```
 
-The JSON event includes an `ssh_forward` argument array. On the browser's local computer, establish that `ssh -N -L PORT:127.0.0.1:PORT YOUR-SSH-HOST` tunnel using the emitted port, then open the emitted authorization URL there. Use the same port on each end; keep the remote CLI and tunnel alive until completion. SSH access itself must already be available and authorized. If forwarding is unavailable, this slice cannot complete remote browser login; it does not weaken redirect checks or route the callback through a hosted relay.
+The JSON event includes an `ssh_forward` argument array. On the browser's local computer, establish that `ssh -N -L PORT:127.0.0.1:PORT YOUR-SSH-HOST` tunnel using the emitted port, then open the emitted authorization URL there. Use the same port on each end; keep the remote CLI and tunnel alive until completion. SSH access itself must already be available and authorized. If forwarding is unavailable, use the explicit Device Authorization flow below. PKCE callback validation remains unchanged; no hosted relay is used.
 
 ### Credentials, renewal and revocation
 
@@ -403,3 +403,31 @@ The repository-local `.agents/skills/walletgate-cli/SKILL.md` is delivered with 
 ### Verification
 
 `npx vitest run tests/app/management.test.ts tests/app/applications.test.ts tests/app/cli.test.ts` exercises actual provider/SQLite and CLI credential boundaries. `npx playwright test tests/e2e/management.spec.ts tests/e2e/applications.spec.ts tests/e2e/oidc.spec.ts` exercises browser consent/revocation/guidance, actual CLI login/commands and RP regressions. Use full `bash scripts/verify.sh` for the required complete local gate. Tests use disposable initialized databases and generated wallets, never live deployment credentials.
+
+### Headless Device Authorization
+
+On remote Linux, run the CLI with an explicit flow selection:
+
+```sh
+npm run cli -- login --device --origin https://YOUR-WALLETGATE --label Remote-agent --profile remote
+```
+
+This starts native RFC 8628 OAuth Device Authorization without a browser process, callback listener or SSH tunnel. The CLI prints a JSON event containing `verification_uri`, `verification_uri_complete` when supplied, `user_code`, expiry and polling interval. A scannable terminal QR and instructions appear on stderr. Open the trusted URL or scan the QR on your browser device. The manual URL allows entering the displayed code yourself. Neither the URL nor scanning approves access.
+
+Sign in with SIWE before code lookup, select **Review code**, compare the code with the initiating CLI, and select its registration and per-client permissions. **The code matches my CLI** and **Allow continued access within these limits** start unchecked. Continued-access consent is required for device login; choose **Deny** to end without credentials. The label is descriptive, not verified device identity. Never approve a request you did not start. The verification page supports existing wallet paths; this feature does not certify additional mobile wallets.
+
+Pending requests expire exactly five minutes after issuance, including time spent signing in. Five incorrect code submissions per SIWE session in a fixed five-minute window block further lookups until that window ends, across codes and tabs. No new persistent IP tracking is added. CLI polling respects the server interval and increases it on `slow_down` and connection failures. Ctrl+C stops local polling; it does not claim server cancellation, and unconsumed requests expire naturally. Lost redemption responses require a new login.
+
+Credentials use the same protected files, resource binding, refresh rotation, seven-day inactivity/30-day absolute limits and individual revocation as PKCE login. The CLI never prints the confidential device code or tokens. Reusing a profile preserves its issuer/wallet boundary; successful device or PKCE replacement revokes the prior grant for that profile. Denial/cancellation/failure before successful replacement preserves it. Use another profile for independent authorizations. `--device` is only valid with `login` and cannot be combined with `--ssh-host`.
+
+### Explicit local database replacement for the device schema
+
+Normal startup never migrates or removes data. Existing databases without device storage are refused unchanged. Initialize a separate empty database using the existing initialization command, or, **only for a local development/test database whose contents you intend to discard**, stop its server and run:
+
+```sh
+node --import tsx scripts/reset-local-database.ts --database /absolute/local/test.sqlite --environment development --confirm DELETE-LOCAL-DATABASE
+```
+
+This explicitly removes all data in the selected initialized WalletGate database and initializes the current schema, including the system CLI. Users, sessions, registered clients, grants and signing keys are lost; old credentials no longer work. It refuses unrelated databases, relative/symlink paths, missing confirmation and non-development/test or production execution. Environment flags are operator assertions, not proof that a path is nonproduction; inspect the target before execution. Shared/deployed resets, deployment and existing-data conversion are outside this story. The older identity-only reset remains distinct and also clears pending device authorization.
+
+Device verification: `npm run test -- tests/app/device.test.ts tests/app/device-cli.test.ts tests/app/database.test.ts` and `npx playwright test tests/e2e/device.spec.ts`; full gate remains `bash scripts/verify.sh`. Automated separate-browser tests use simulated wallet providers with real signatures; physical wallets and remote hardware require separately reported observation.

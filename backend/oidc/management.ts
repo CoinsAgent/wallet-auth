@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import type { BetterAuthPlugin, GenericEndpointContext } from '@better-auth/core';
-import { getOAuthProviderApi, type OAuthOptions, type OAuthRefreshToken, type Scope } from '@better-auth/oauth-provider';
+import { DEVICE_CODE_GRANT_TYPE, getOAuthProviderApi, type OAuthOptions, type OAuthRefreshToken, type Scope } from '@better-auth/oauth-provider';
 import { protocolAdapter } from './policy';
 
 export const CLI_CLIENT = 'walletgate-cli';
@@ -34,7 +34,7 @@ export function revokeManagement(db: Database.Database, id: string) {
 }
 function invalid(error = 'invalid_grant'): never { throw new APIError('BAD_REQUEST', { error, error_description: 'Authorization is invalid or expired. Authorize the CLI again.' }); }
 export function managementTokenPolicy(db: Database.Database, options: OAuthOptions<Scope[]>) {
-  return { id: 'walletgate-management-policy', hooks: { before: [{ matcher: ctx => ctx.path === '/oauth2/token' || ctx.path === '/oauth2/revoke', handler: createAuthMiddleware(async ctx => {
+  return { id: 'walletgate-management-policy', hooks: { before: [{ matcher: ctx => ctx.path === '/oauth2/revoke' || ctx.path === '/oauth2/token' && ctx.body?.grant_type !== DEVICE_CODE_GRANT_TYPE, handler: createAuthMiddleware(async ctx => {
     const provider = getOAuthProviderApi(ctx, options, ctx.body?.grant_type === 'refresh_token' ? 'refresh_token' : 'authorization_code');
     const { clientId, client } = await provider.authenticateClient({ requireCredentials: false });
     if (clientId !== CLI_CLIENT) invalid('unauthorized_client');
@@ -196,14 +196,17 @@ export function createManagement(deps: { db: Database.Database; origin: string; 
       if (body.get('client_id') !== CLI_CLIENT) return null;
       if (!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded') || [...body.keys()].some(k=>body.getAll(k).length!==1)) return json({ error:'invalid_request' },400);
       const headers = new Headers(request.headers); headers.delete('cookie'); headers.delete('origin');
+      const deviceDeadline=body.get('grant_type')===DEVICE_CODE_GRANT_TYPE?(db.prepare('SELECT expiresAt FROM deviceCode WHERE deviceCode = ?').get(body.get('device_code')??'') as {expiresAt:string}|undefined)?.expiresAt:undefined;
       const response = await deps.native(new Request(request.url,{ method:'POST',headers,body:text }));
       if (response.ok && url.pathname.endsWith('/token')) {
+        if(deviceDeadline&&Date.now()>=new Date(deviceDeadline).getTime())throw new Error('DeviceIssuanceDeadline');
         const tokens = await response.clone().json();
         const ctx = await deps.context();
         const key = await getOAuthProviderApi(ctx,deps.options).hashToken(tokens.access_token,'access_token');
         const row = db.prepare('SELECT authorizationCodeId FROM oauthAccessToken WHERE token = ?').get(key) as { authorizationCodeId:string } | undefined;
         const grant = row ? db.prepare('SELECT * FROM managementGrant WHERE codeId = ?').get(row.authorizationCodeId) as ManagementGrant | undefined : undefined;
         if (!grantActive(grant,false)) throw new Error('ManagementIssuanceMismatch');
+        if(deviceDeadline&&Date.now()>=new Date(deviceDeadline).getTime())throw new Error('DeviceIssuanceDeadline');
         db.prepare('UPDATE managementGrant SET activated = 1 WHERE id = ?').run(grant.id);
         if (grant.replacement) revokeManagement(db,grant.replacement);
         return json({ ...tokens, authorization_id:grant.id, owner:grant.owner, permissions:JSON.parse(grant.permissions), registration:!!grant.registration, grant_expires_at:grant.expiresAt, issuer:origin+'/api/auth' });
